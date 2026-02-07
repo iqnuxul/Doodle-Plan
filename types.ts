@@ -1,29 +1,42 @@
-export enum TaskType {
-  CHORE = 'CHORE',
-  WORK = 'WORK',
-  MEAL = 'MEAL',
-  SHOPPING = 'SHOPPING',
-  EVENT = 'EVENT',
-  HOBBY = 'HOBBY',
+
+export enum EnergyType {
+  CHORE = 'CHORE', // Red-Brown [-]
+  FUN = 'FUN', // Yellow [+]
+  CREATE = 'CREATE', // Blue [-]
+  HEAL = 'HEAL', // Green [+]
+}
+
+export interface SubStep {
+  id: string;
+  title: string;
+  completed: boolean;
 }
 
 export interface Task {
   id: string;
   title: string;
-  type: TaskType;
+  type: EnergyType;
   completed: boolean;
   date?: string; // ISO Date string YYYY-MM-DD
   startTime?: number; // 0-23
-  duration?: number; // in hours
-  cost?: number;
-  dependencies?: string[]; // IDs of tasks this depends on
+  duration: number; // in hours
+  energyPoints: number; // +/- value
+  substeps: SubStep[];
   description?: string;
-  isSticker?: boolean; // If true, it's a generated image
-  imageUrl?: string;
+}
+
+export interface StickerItem {
+  id: string;
+  imageUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
 }
 
 export interface ExpenseSummary {
-  category: TaskType;
+  category: EnergyType;
   total: number;
 }
 

@@ -1,3 +1,4 @@
+
 import React, { useRef, useState, useEffect } from 'react';
 import { X, Wand2, Eraser } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
@@ -89,10 +90,8 @@ const SketchPad: React.FC<SketchPadProps> = ({ onClose, onSave }) => {
       const base64Data = canvasRef.current.toDataURL('image/png').split(',')[1];
       
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-      // Using gemini-2.5-flash-image for image editing/generation tasks
       const model = 'gemini-2.5-flash-image';
       
-      // Updated prompt to match the specific "Thaifood/O'feeling" sticker style
       const prompt = `
         Transform this sketch into a cute, hand-drawn sticker style illustration. 
         Style description:
@@ -126,7 +125,6 @@ const SketchPad: React.FC<SketchPadProps> = ({ onClose, onSave }) => {
       }
 
       if (!generatedImage) {
-          // Fallback if no image returned
           generatedImage = canvasRef.current.toDataURL('image/png');
       }
 
@@ -142,16 +140,16 @@ const SketchPad: React.FC<SketchPadProps> = ({ onClose, onSave }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4 font-['Special_Elite']">
-      <div className="bg-[#fdfbf7] pencil-box p-4 w-full max-w-md flex flex-col gap-4">
+    <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-[100] p-4">
+      <div className="soft-card p-6 w-full max-w-md flex flex-col gap-4">
         <div className="flex justify-between items-center">
-          <h3 className="text-xl font-bold text-stone-700">Doodle Something!</h3>
-          <button onClick={onClose} className="p-1 hover:bg-stone-200 rounded-full">
-            <X className="w-6 h-6" />
+          <h3 className="text-xl font-bold text-stone-700 letterpress-title">Doodle Something!</h3>
+          <button onClick={onClose} className="p-2 hover:bg-stone-100 rounded-full text-stone-400">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="border-2 border-stone-400 rounded-sm overflow-hidden bg-white touch-none">
+        <div className="border border-stone-200 rounded-xl overflow-hidden bg-white touch-none shadow-inner">
           <canvas
             ref={canvasRef}
             width={350}
@@ -167,19 +165,19 @@ const SketchPad: React.FC<SketchPadProps> = ({ onClose, onSave }) => {
           />
         </div>
 
-        <div className="flex justify-between items-center gap-2">
+        <div className="flex justify-between items-center gap-3 pt-2">
             <button 
                 onClick={handleClear}
-                className="flex items-center gap-2 px-4 py-2 border-2 border-stone-600 rounded-sm hover:bg-red-50 text-red-600 font-bold pencil-border"
+                className="flex items-center gap-2 px-4 py-3 border border-stone-200 rounded-xl hover:bg-red-50 hover:border-red-200 text-stone-500 hover:text-red-500 font-bold transition-all text-xs uppercase tracking-wider"
             >
-                <Eraser size={20} /> Clear
+                <Eraser size={16} /> Clear
             </button>
             <button 
                 onClick={handleMagicify}
                 disabled={isGenerating}
-                className="flex-1 flex items-center justify-center gap-2 px-4 py-2 bg-yellow-100 border-2 border-stone-600 rounded-sm hover:bg-yellow-200 font-bold transition-all disabled:opacity-50 pencil-border text-stone-700"
+                className="flex-1 flex items-center justify-center gap-2 px-4 py-3 bg-yellow-100/50 border border-yellow-200 rounded-xl hover:bg-yellow-200/50 hover:shadow-md font-bold transition-all disabled:opacity-50 text-stone-700 text-xs uppercase tracking-wider"
             >
-                {isGenerating ? 'Magic happening...' : <><Wand2 size={20} /> Make it a Sticker</>}
+                {isGenerating ? 'Magic happening...' : <><Wand2 size={16} /> Make Sticker</>}
             </button>
         </div>
       </div>

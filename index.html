@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -7,54 +8,110 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Special+Elite&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Cutive+Mono&family=Special+Elite&display=swap" rel="stylesheet">
     <style>
+      :root {
+        --paper-color: #f0f0eb;
+        --card-color: #fdfdfc;
+        --ink-color: #292524; /* Darker Stone 800 */
+      }
+
       body {
-        font-family: 'Special Elite', cursive;
-        background-color: #fdfbf7;
-        background-image: radial-gradient(#d6d3d1 1px, transparent 1px);
-        background-size: 20px 20px;
-        color: #44403c; /* Stone 700 - Pencil Lead Color */
+        font-family: 'Cutive Mono', monospace;
+        background-color: var(--paper-color);
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.08'/%3E%3C/svg%3E");
+        color: var(--ink-color);
+        height: 100vh;
+        overflow: hidden;
       }
       
-      /* Custom Scrollbar */
+      /* Letterpress / Debossed Text Effect - SHARPENED */
+      .letterpress {
+        color: #292524;
+        text-shadow: 0px 1px 0px rgba(255, 255, 255, 1); /* Hard shadow for definition */
+        font-weight: 700;
+      }
+
+      .letterpress-title {
+        color: #1c1917;
+        text-shadow: 1px 1px 0px rgba(255,255,255,1);
+      }
+      
+      /* Utility for task text to be extra clear */
+      .text-strong {
+        font-weight: 700;
+        text-shadow: none; /* No shadow on small text to prevent blur */
+      }
+
+      /* Soft Card Style */
+      .soft-card {
+        background-color: var(--card-color);
+        border-radius: 24px;
+        box-shadow: 
+          8px 8px 16px rgba(163, 177, 198, 0.15), 
+          -8px -8px 16px rgba(255, 255, 255, 0.8),
+          inset 0 0 40px rgba(255, 255, 255, 0.5);
+        border: 1px solid rgba(255,255,255,0.6);
+        position: relative;
+        overflow: hidden;
+      }
+      
+      .soft-card::before {
+        content: "";
+        position: absolute;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.03'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 0;
+      }
+      
+      .soft-card > * {
+        position: relative;
+        z-index: 1;
+      }
+
       ::-webkit-scrollbar {
-        width: 10px;
-        height: 10px;
+        width: 6px;
+        height: 6px;
       }
       ::-webkit-scrollbar-track {
         background: transparent; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #d6d3d1; 
-        border-radius: 5px;
-        border: 2px solid #fdfbf7;
+        background: rgba(0,0,0,0.15); 
+        border-radius: 10px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #a8a29e; 
+        background: rgba(0,0,0,0.3); 
       }
 
-      /* Pencil Stroke Utilities */
-      .pencil-border {
-        border: 2px solid #44403c;
-        border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
-        transition: all 0.2s ease;
+      .cursor-ns-resize {
+        cursor: ns-resize;
       }
       
-      .pencil-box {
-        background: white;
-        border: 2px solid #44403c;
-        border-radius: 2% 6% 5% 4% / 1% 1% 2% 4%;
-        box-shadow: 2px 2px 0px 0px rgba(68, 64, 60, 0.2);
-      }
-      
-      .pencil-box:hover {
-         border-radius: 1% 7% 4% 6% / 2% 1% 3% 2%;
+      @media print {
+        body {
+            background: white;
+            -webkit-print-color-adjust: exact;
+        }
+        .no-print {
+            display: none !important;
+        }
+        .print-layout {
+            margin: 0 !important;
+            width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+        ::-webkit-scrollbar {
+            display: none;
+        }
       }
 
-      /* Overwrite Tailwind borders for that graphite look */
       .border-stone-800 {
-        border-color: #44403c !important; /* Stone 700 */
+        border-color: #46423e !important;
       }
     </style>
   <script type="importmap">
