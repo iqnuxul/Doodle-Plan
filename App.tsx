@@ -28,6 +28,7 @@ import { Task, EnergyType, Achievement, StickerItem } from './types';
 import SketchPad from './components/SketchPad';
 import EditTaskModal from './components/EditTaskModal';
 import SettingsModal from './components/SettingsModal';
+import EnergyFlowChart from './components/EnergyFlowChart';
 
 // --- Configuration & Constants ---
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -54,26 +55,25 @@ const getEnergyIcon = (type: EnergyType) => {
     }
 };
 
-// Initial Data
-const INITIAL_TASKS: Task[] = [
-  { 
-      id: '1', title: 'Groceries', type: EnergyType.CHORE, completed: false, 
-      energyPoints: -15, duration: 1, substeps: [] 
-  },
-  { 
-      id: '2', title: 'Paint Studio', type: EnergyType.CREATE, completed: false, 
-      energyPoints: -30, duration: 2, substeps: [] 
-  },
-  { 
-      id: '3', title: 'Yoga', type: EnergyType.HEAL, completed: false, 
-      energyPoints: 20, duration: 1, date: new Date().toISOString().split('T')[0], startTime: 7, substeps: [] 
-  },
-];
-
 export default function App() {
   // --- State ---
   const [view, setView] = useState<'month' | 'week'>('week');
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS);
+  
+  // Initialize with a full day of data for the chart demo
+  const [tasks, setTasks] = useState<Task[]>(() => {
+      const today = new Date().toISOString().split('T')[0];
+      return [
+        { id: '1', title: 'Morning Yoga', type: EnergyType.HEAL, completed: true, energyPoints: 20, duration: 1, date: today, startTime: 7, substeps: [] },
+        { id: '2', title: 'Deep Work', type: EnergyType.CREATE, completed: false, energyPoints: -40, duration: 3, date: today, startTime: 9, substeps: [] },
+        { id: '3', title: 'Lunch Break', type: EnergyType.FUN, completed: false, energyPoints: 15, duration: 1, date: today, startTime: 12, substeps: [] },
+        { id: '4', title: 'Team Meeting', type: EnergyType.CHORE, completed: false, energyPoints: -20, duration: 1, date: today, startTime: 13, substeps: [] },
+        { id: '5', title: 'Emails', type: EnergyType.CHORE, completed: false, energyPoints: -10, duration: 1, date: today, startTime: 14, substeps: [] },
+        { id: '6', title: 'Design Session', type: EnergyType.CREATE, completed: false, energyPoints: -25, duration: 2, date: today, startTime: 15, substeps: [] },
+        { id: '7', title: 'Walk Dog', type: EnergyType.HEAL, completed: false, energyPoints: 30, duration: 1, date: today, startTime: 17, substeps: [] },
+        { id: '8', title: 'Gaming', type: EnergyType.FUN, completed: false, energyPoints: 40, duration: 2, date: today, startTime: 20, substeps: [] },
+      ];
+  });
+
   const [stickers, setStickers] = useState<StickerItem[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [now, setNow] = useState(new Date()); 
@@ -94,7 +94,15 @@ export default function App() {
   const [dropTarget, setDropTarget] = useState<{ date?: string, hour?: number, type: 'cell' | 'backlog' } | null>(null);
   
   const [resizingTask, setResizingTask] = useState<{task: Task, startY: number, startDuration: number} | null>(null);
+  const [resizingTaskTop, setResizingTaskTop] = useState<{task: Task, startY: number, startTime: number, startDuration: number} | null>(null);
   
+  // New Copy Drag State
+  const [dragCopyState, setDragCopyState] = useState<{
+      originalTask: Task;
+      direction: 'left' | 'right';
+      previews: Task[];
+  } | null>(null);
+
   // Sticker Transformation State
   const [activeStickerId, setActiveStickerId] = useState<string | null>(null);
   const [isDraggingSticker, setIsDraggingSticker] = useState(false);
@@ -114,12 +122,33 @@ export default function App() {
 
   const currentMonthStart = useMemo(() => new Date(currentDate.getFullYear(), currentDate.getMonth(), 1), [currentDate]);
 
-  const dailyEnergy = useMemo(() => {
-    const targetDateStr = now.toISOString().split('T')[0];
-    const daysTasks = tasks.filter(t => t.date === targetDateStr);
-    const used = daysTasks.reduce((acc, t) => acc + (t.energyPoints || 0), 0);
-    return { used, remaining: ENERGY_BUDGET + used }; 
-  }, [tasks, now]);
+  // --- Helpers ---
+  const getDatesInRange = (startDate: string, endDate: string) => {
+      const dates = [];
+      const [y1, m1, d1] = startDate.split('-').map(Number);
+      const [y2, m2, d2] = endDate.split('-').map(Number);
+      
+      // Use noon to avoid DST/Timezone midnight issues
+      let curr = new Date(y1, m1 - 1, d1, 12, 0, 0);
+      const end = new Date(y2, m2 - 1, d2, 12, 0, 0);
+      
+      const step = end > curr ? 1 : -1;
+      
+      // We start from the day AFTER/BEFORE the start date
+      curr.setDate(curr.getDate() + step);
+
+      // Safety counter
+      let limit = 0;
+      while ((step > 0 ? curr <= end : curr >= end) && limit < 100) {
+          const y = curr.getFullYear();
+          const m = String(curr.getMonth() + 1).padStart(2, '0');
+          const d = String(curr.getDate()).padStart(2, '0');
+          dates.push(`${y}-${m}-${d}`);
+          curr.setDate(curr.getDate() + step);
+          limit++;
+      }
+      return dates;
+  };
 
   // --- Effects ---
   useEffect(() => {
@@ -130,6 +159,7 @@ export default function App() {
   // Global Mouse Handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+        // 1. Task Dragging (Move)
         if (draggedTask) {
             setDragPosition({ x: e.clientX, y: e.clientY });
             const elements = document.elementsFromPoint(e.clientX, e.clientY);
@@ -148,14 +178,61 @@ export default function App() {
             }
         }
 
+        // 2. Task Resizing (Bottom)
         if (resizingTask) {
             const deltaY = e.clientY - resizingTask.startY;
-            // 2.5rem per hour = 40px per hour
-            const hourDelta = deltaY / 40; 
+            const hourDelta = deltaY / 40; // 40px per hour
             const newDuration = Math.max(0.25, Math.round((resizingTask.startDuration + hourDelta) * 4) / 4);
             setTasks(prev => prev.map(t => t.id === resizingTask.task.id ? { ...t, duration: newDuration } : t));
         }
 
+        // 3. Task Resizing (Top)
+        if (resizingTaskTop) {
+            const deltaY = e.clientY - resizingTaskTop.startY;
+            const hourDelta = deltaY / 40; // 40px per hour
+            let newStart = resizingTaskTop.startTime + hourDelta;
+            newStart = Math.round(newStart * 4) / 4; 
+            const end = resizingTaskTop.startTime + resizingTaskTop.startDuration;
+            const newDuration = end - newStart;
+            if (newDuration >= 0.25 && newStart >= 0) {
+                 setTasks(prev => prev.map(t => t.id === resizingTaskTop.task.id ? { ...t, startTime: newStart, duration: newDuration } : t));
+            }
+        }
+
+        // 4. Copy Dragging (Left/Right)
+        if (dragCopyState) {
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            // Look for a day column or cell
+            const target = elements.find(el => el.hasAttribute('data-date'));
+            if (target) {
+                const targetDate = target.getAttribute('data-date');
+                if (targetDate && targetDate !== dragCopyState.originalTask.date) {
+                    const originDate = dragCopyState.originalTask.date!;
+                    
+                    // Logic: Generate preview tasks between origin and target
+                    let shouldGenerate = false;
+                    if (dragCopyState.direction === 'right' && targetDate > originDate) shouldGenerate = true;
+                    if (dragCopyState.direction === 'left' && targetDate < originDate) shouldGenerate = true;
+
+                    if (shouldGenerate) {
+                        const datesToFill = getDatesInRange(originDate, targetDate);
+                        const newPreviews = datesToFill.map(d => ({
+                            ...dragCopyState.originalTask,
+                            id: `preview-${d}`,
+                            date: d,
+                            title: dragCopyState.originalTask.title,
+                            isPreview: true
+                        }));
+                        setDragCopyState(prev => prev ? { ...prev, previews: newPreviews } : null);
+                    } else {
+                        // If we move back to origin or past it in wrong direction, clear previews
+                        setDragCopyState(prev => prev ? { ...prev, previews: [] } : null);
+                    }
+                }
+            }
+        }
+
+        // 5. Sticker Dragging
         if (isDraggingSticker && activeStickerId) {
             setStickers(prev => prev.map(s => 
                 s.id === activeStickerId 
@@ -166,6 +243,7 @@ export default function App() {
     };
 
     const handleMouseUp = (e: MouseEvent) => {
+        // Handle Task Drag Drop
         if (draggedTask && dropTarget) {
             const isCopy = e.altKey;
             let taskToProcess = draggedTask;
@@ -182,9 +260,24 @@ export default function App() {
             }
         }
 
+        // Handle Copy Drag Commit
+        if (dragCopyState) {
+            if (dragCopyState.previews.length > 0) {
+                // Convert previews to real tasks
+                const newTasks = dragCopyState.previews.map(p => ({
+                    ...p,
+                    id: Math.random().toString(36).substr(2, 9),
+                    isPreview: undefined
+                }));
+                setTasks(prev => [...prev, ...newTasks]);
+            }
+            setDragCopyState(null);
+        }
+
         setDraggedTask(null);
         setDropTarget(null);
         setResizingTask(null);
+        setResizingTaskTop(null);
         setIsDraggingSticker(false);
     };
 
@@ -194,7 +287,7 @@ export default function App() {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedTask, dropTarget, resizingTask, isDraggingSticker, activeStickerId, dragOffset, wakingStart]);
+  }, [draggedTask, dropTarget, resizingTask, resizingTaskTop, dragCopyState, isDraggingSticker, activeStickerId, dragOffset, wakingStart]);
 
   // --- Handlers ---
   const addTask = (title: string, type: EnergyType) => {
@@ -214,6 +307,22 @@ export default function App() {
       e.stopPropagation();
       e.preventDefault();
       setResizingTask({ task, startY: e.clientY, startDuration: task.duration });
+  };
+
+  const handleResizeTopStart = (e: React.MouseEvent, task: Task) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setResizingTaskTop({ task, startY: e.clientY, startTime: task.startTime!, startDuration: task.duration });
+  };
+
+  const handleCopyDragStart = (e: React.MouseEvent, task: Task, direction: 'left' | 'right') => {
+      e.stopPropagation();
+      e.preventDefault();
+      setDragCopyState({
+          originalTask: task,
+          direction,
+          previews: []
+      });
   };
 
   const addStickerToBoard = (url: string) => {
@@ -375,6 +484,13 @@ export default function App() {
     const HOUR_HEIGHT_REM = 2.5; // h-10 is 2.5rem
     const timeTopRem = (nowMinutes - startMinutes) * (HOUR_HEIGHT_REM / 60);
 
+    // Merge actual tasks with previews for rendering
+    const allRenderTasks = [...tasks];
+    if (dragCopyState && dragCopyState.previews.length > 0) {
+        // We only add previews if they aren't already in the list (though ID check handles key uniqueness)
+        dragCopyState.previews.forEach(p => allRenderTasks.push(p));
+    }
+
     return (
         <div className="flex flex-col h-full overflow-hidden">
             {/* Header */}
@@ -411,6 +527,7 @@ export default function App() {
                         return (
                             <div 
                                 key={dateStr} 
+                                data-date={dateStr}
                                 className={`col-span-1 border-r border-stone-200/40 last:border-0 relative ${isToday ? 'bg-red-50/10' : ''}`}
                             >
                                 {hours.map(h => {
@@ -447,14 +564,14 @@ export default function App() {
 
                                 {isToday && isTimeInView && (
                                     <div 
-                                        className="absolute w-full border-t border-red-400 z-30 pointer-events-none flex items-center opacity-40"
+                                        className="absolute w-full border-t border-red-400 z-30 pointer-events-none opacity-40"
                                         style={{ top: `${timeTopRem}rem` }}
                                     >
-                                        <div className="w-1.5 h-1.5 rounded-full bg-red-400 -ml-0.5 shadow-sm"></div>
+                                        <div className="w-2 h-2 rounded-full bg-red-400 -mt-1 -ml-1 shadow-sm"></div>
                                     </div>
                                 )}
                                 
-                                {tasks.filter(t => t.date === dateStr && t.startTime !== undefined).map(task => {
+                                {allRenderTasks.filter(t => t.date === dateStr && t.startTime !== undefined).map(task => {
                                     if (draggedTask?.id === task.id) return null;
                                     
                                     const startOffset = task.startTime! - hours[0];
@@ -468,34 +585,85 @@ export default function App() {
 
                                     if (height <= 0) return null;
 
+                                    const isPreview = (task as any).isPreview;
+
                                     return (
                                         <div 
                                             key={task.id}
-                                            onMouseDown={(e) => { e.stopPropagation(); setDraggedTask(task); setDragPosition({x: e.clientX, y: e.clientY}); }}
-                                            onDoubleClick={(e) => { e.stopPropagation(); setEditingTask(task); }}
-                                            className={`absolute left-1 right-1 p-2 rounded-md shadow-sm border text-xs cursor-grab overflow-hidden flex flex-col ${getEnergyColor(task.type)} ${task.completed ? 'opacity-60 grayscale' : ''}`}
+                                            onMouseDown={(e) => { 
+                                                if (isPreview) return;
+                                                e.stopPropagation(); 
+                                                setDraggedTask(task); 
+                                                setDragPosition({x: e.clientX, y: e.clientY}); 
+                                            }}
+                                            onDoubleClick={(e) => { 
+                                                if (isPreview) return;
+                                                e.stopPropagation(); 
+                                                setEditingTask(task); 
+                                            }}
+                                            className={`absolute left-1 right-1 px-4 py-2 rounded-md shadow-sm border text-xs cursor-grab overflow-hidden flex flex-col group ${getEnergyColor(task.type)} ${task.completed ? 'opacity-60 grayscale' : ''} ${isPreview ? 'opacity-50 border-dashed border-stone-400 pointer-events-none' : ''}`}
                                             style={{ top: `${top}rem`, height: `${height}rem`, zIndex: 20 }}
                                         >
-                                            <div className="flex justify-between items-start">
+                                            {/* Top Resize Handle */}
+                                            {!isPreview && (
+                                                <div 
+                                                    className="absolute top-0 left-0 w-full h-2 cursor-ns-resize flex justify-center items-start opacity-0 group-hover:opacity-100 z-30 transition-opacity"
+                                                    onMouseDown={(e) => handleResizeTopStart(e, task)}
+                                                >
+                                                    <div className="w-6 h-1 bg-stone-400/50 rounded-full mt-0.5"></div>
+                                                </div>
+                                            )}
+
+                                            {/* Left Copy Handle */}
+                                            {!isPreview && (
+                                                <div
+                                                    className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30"
+                                                    onMouseDown={(e) => handleCopyDragStart(e, task, 'left')}
+                                                >
+                                                    
+                                                </div>
+                                            )}
+
+                                            {/* Right Copy Handle */}
+                                            {!isPreview && (
+                                                <div
+                                                    className="absolute top-0 bottom-0 right-0 w-2 cursor-ew-resize z-30"
+                                                    onMouseDown={(e) => handleCopyDragStart(e, task, 'right')}
+                                                >
+                                                    
+                                                </div>
+                                            )}
+
+                                            <div className="flex justify-between items-start pl-1 pr-1 pointer-events-none">
                                                 <span className={`font-extrabold leading-tight text-strong ${task.completed ? 'line-through decoration-1' : ''}`}>{task.title}</span>
-                                                <button onClick={(e) => { e.stopPropagation(); setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t)); }}>
+                                                <button 
+                                                    className="pointer-events-auto"
+                                                    onClick={(e) => { 
+                                                        if (isPreview) return;
+                                                        e.stopPropagation(); 
+                                                        setTasks(prev => prev.map(t => t.id === task.id ? { ...t, completed: !t.completed } : t)); 
+                                                    }}
+                                                >
                                                     {task.completed ? <CheckCircle2 size={12}/> : <Circle size={12} />}
                                                 </button>
                                             </div>
                                             {height > 2 && (
-                                                <div className="mt-1 opacity-70">
+                                                <div className="mt-1 opacity-70 pl-1 pointer-events-none">
                                                     {task.substeps.length > 0 && (
                                                         <div className="text-[9px] font-bold">{task.substeps.filter(s=>s.completed).length}/{task.substeps.length}</div>
                                                     )}
                                                 </div>
                                             )}
                                             
-                                            <div 
-                                                className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize flex justify-center items-end opacity-0 hover:opacity-100 transition-opacity"
-                                                onMouseDown={(e) => handleResizeStart(e, task)}
-                                            >
-                                                <div className="w-6 h-0.5 bg-black/20 rounded-full mb-0.5"></div>
-                                            </div>
+                                            {/* Bottom Resize Handle */}
+                                            {!isPreview && (
+                                                <div 
+                                                    className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize flex justify-center items-end opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                                                    onMouseDown={(e) => handleResizeStart(e, task)}
+                                                >
+                                                    <div className="w-6 h-1 bg-stone-400/50 rounded-full mb-0.5"></div>
+                                                </div>
+                                            )}
                                         </div>
                                     );
                                 })}
@@ -532,20 +700,14 @@ export default function App() {
             <p className="text-xs text-stone-600 font-bold tracking-widest uppercase letterpress">Daily Organizer</p>
         </div>
 
-        {/* Energy Budget */}
+        {/* Energy Flow Chart - Replaces Energy Budget */}
         <div className="mb-6">
-             <div className="bg-white/40 p-4 rounded-xl border border-white/60 shadow-sm">
-                <div className="flex justify-between items-center mb-2">
-                    <span className="font-bold flex items-center gap-2 text-sm letterpress text-stone-800"><Battery size={14} /> Energy</span>
-                    <span className="text-xs font-bold letterpress opacity-80">{dailyEnergy.used > 0 ? '+' : ''}{dailyEnergy.used} / {ENERGY_BUDGET}</span>
-                </div>
-                <div className="w-full bg-stone-300 h-1.5 rounded-full overflow-hidden">
-                    <div 
-                        className={`h-full transition-all duration-500 ${dailyEnergy.remaining < 20 ? 'bg-red-400' : 'bg-green-500'}`}
-                        style={{ width: `${Math.min(100, Math.max(0, (100 + dailyEnergy.used)))}%` }}
-                    ></div>
-                </div>
-             </div>
+            <EnergyFlowChart 
+                tasks={tasks}
+                date={now}
+                startHour={wakingStart}
+                endHour={wakingEnd}
+            />
         </div>
 
         {/* Todo Backlog */}
