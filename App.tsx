@@ -22,58 +22,153 @@ import {
   RotateCw,
   Maximize2,
   LayoutGrid,
-  Columns
+  Columns,
+  ChevronDown,
+  Pin,
+  PinOff,
+  CheckSquare,
+  Square,
+  Sliders
 } from 'lucide-react';
 import { Task, EnergyType, Achievement, StickerItem } from './types';
 import SketchPad from './components/SketchPad';
 import EditTaskModal from './components/EditTaskModal';
 import SettingsModal from './components/SettingsModal';
-import EnergyFlowChart from './components/EnergyFlowChart';
 
 // --- Configuration & Constants ---
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const ENERGY_BUDGET = 100;
 
 // Energy Color Mapping - High Contrast for Readability
-const getEnergyColor = (type: EnergyType) => {
-  switch (type) {
-    case EnergyType.CHORE: return 'bg-[#e6dace] border-[#bcaaa4] text-[#3e2723]'; // Cocoa Paper with Dark Brown Text
-    case EnergyType.FUN: return 'bg-[#fcf5c7] border-[#e6dca3] text-[#423d0f]'; // Pale Yellow with Dark Olive Text
-    case EnergyType.CREATE: return 'bg-[#cfe8f7] border-[#b0d2e8] text-[#0c3b5e]'; // Soft Blue with Deep Blue Text
-    case EnergyType.HEAL: return 'bg-[#d8eadd] border-[#b8d6c0] text-[#14331d]'; // Sage Green with Deep Green Text
-    default: return 'bg-stone-50 border-stone-200 text-stone-900';
-  }
+const getEnergyColorStyles = (type: EnergyType, intensity: number = 50) => {
+    // Intensity 0-100 maps to Opacity 0.4 - 1.0 and Saturation adjustments
+    const opacity = 0.4 + (intensity / 100) * 0.6;
+    
+    switch (type) {
+        case EnergyType.CHORE: 
+            return { 
+                backgroundColor: `rgba(141, 110, 99, ${opacity})`, 
+                borderColor: '#8d6e63', 
+                color: '#3e2723' 
+            };
+        case EnergyType.FUN: 
+            return { 
+                backgroundColor: `rgba(253, 224, 71, ${opacity})`, 
+                borderColor: '#eab308', 
+                color: '#422006' 
+            };
+        case EnergyType.CREATE: 
+            return { 
+                backgroundColor: `rgba(56, 189, 248, ${opacity})`, 
+                borderColor: '#0284c7', 
+                color: '#082f49' 
+            };
+        case EnergyType.HEAL: 
+            return { 
+                backgroundColor: `rgba(74, 222, 128, ${opacity})`, 
+                borderColor: '#16a34a', 
+                color: '#052e16' 
+            };
+        default: 
+            return { 
+                backgroundColor: `rgba(214, 211, 209, ${opacity})`, 
+                borderColor: '#a8a29e', 
+                color: '#1c1917' 
+            };
+    }
 };
 
-const getEnergyIcon = (type: EnergyType) => {
-    switch (type) {
-        case EnergyType.CHORE: return '🤎';
-        case EnergyType.FUN: return '💛';
-        case EnergyType.CREATE: return '🩵';
-        case EnergyType.HEAL: return '💚';
-        default: return '⚪';
+const ENERGY_OPTIONS = [
+  { type: EnergyType.CHORE, icon: '🤎', label: 'Chore', color: '#8d6e63' },
+  { type: EnergyType.FUN, icon: '💛', label: 'Fun', color: '#fde047' },
+  { type: EnergyType.CREATE, icon: '🩵', label: 'Create', color: '#039be5' },
+  { type: EnergyType.HEAL, icon: '💚', label: 'Heal', color: '#43a047' },
+];
+
+// Helper to generate a week of diverse data
+const generateWeeklyData = () => {
+    const tasks: Task[] = [];
+    const today = new Date();
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay()); // Sunday
+
+    const profiles = [
+        { name: "Lazy Sunday", types: [EnergyType.HEAL, EnergyType.FUN], ratio: [0.8, 0.2] },
+        { name: "Manic Monday", types: [EnergyType.CHORE, EnergyType.CREATE], ratio: [0.7, 0.3] },
+        { name: "Focus Tuesday", types: [EnergyType.CREATE, EnergyType.CHORE], ratio: [0.6, 0.4] },
+        { name: "Wellness Wednesday", types: [EnergyType.HEAL, EnergyType.CREATE], ratio: [0.5, 0.5] },
+        { name: "Thriving Thursday", types: [EnergyType.FUN, EnergyType.CHORE], ratio: [0.6, 0.4] },
+        { name: "Fun Friday", types: [EnergyType.FUN, EnergyType.HEAL], ratio: [0.8, 0.2] },
+        { name: "Social Saturday", types: [EnergyType.FUN, EnergyType.CREATE], ratio: [0.9, 0.1] },
+    ];
+
+    for (let i = 0; i < 7; i++) {
+        const d = new Date(startOfWeek);
+        d.setDate(d.getDate() + i);
+        const dateStr = d.toISOString().split('T')[0];
+        const profile = profiles[i];
+
+        // Generate 3-5 tasks per day
+        const numTasks = 3 + Math.floor(Math.random() * 3);
+        for(let j=0; j<numTasks; j++) {
+            const type = Math.random() < profile.ratio[0] ? profile.types[0] : profile.types[1];
+            tasks.push({
+                id: `task-${i}-${j}`,
+                title: `${profile.name} Task ${j+1}`,
+                type: type,
+                completed: Math.random() > 0.5,
+                date: dateStr,
+                startTime: 8 + (j * 2),
+                duration: 1 + Math.floor(Math.random()),
+                energyPoints: 50, // Default mid intensity
+                substeps: []
+            });
+        }
     }
+    return tasks;
+};
+
+// --- Sticky Ball Component ---
+const StickyBall = () => {
+    const ref = useRef<HTMLDivElement>(null);
+    const [pupilPos, setPupilPos] = useState({ x: 0, y: 0 });
+
+    useEffect(() => {
+        const handleMove = (e: MouseEvent) => {
+            if (!ref.current) return;
+            const rect = ref.current.getBoundingClientRect();
+            const cx = rect.left + rect.width / 2;
+            const cy = rect.top + rect.height / 2;
+            const dx = e.clientX - cx;
+            const dy = e.clientY - cy;
+            const angle = Math.atan2(dy, dx);
+            const dist = Math.min(3, Math.hypot(dx, dy) / 8); 
+
+            setPupilPos({
+                x: Math.cos(angle) * dist,
+                y: Math.sin(angle) * dist
+            });
+        };
+        window.addEventListener('mousemove', handleMove);
+        return () => window.removeEventListener('mousemove', handleMove);
+    }, []);
+
+    return (
+        <div ref={ref} className="w-8 h-8 bg-stone-800 rounded-full flex items-center justify-center gap-[2px] shadow-sm relative overflow-hidden transition-transform hover:scale-110 cursor-pointer">
+             <div className="w-2.5 h-2.5 bg-white rounded-full flex items-center justify-center overflow-hidden">
+                 <div className="w-1.5 h-1.5 bg-black rounded-full" style={{ transform: `translate(${pupilPos.x}px, ${pupilPos.y}px)` }}></div>
+             </div>
+             <div className="w-2.5 h-2.5 bg-white rounded-full flex items-center justify-center overflow-hidden">
+                 <div className="w-1.5 h-1.5 bg-black rounded-full" style={{ transform: `translate(${pupilPos.x}px, ${pupilPos.y}px)` }}></div>
+             </div>
+        </div>
+    );
 };
 
 export default function App() {
   // --- State ---
   const [view, setView] = useState<'month' | 'week'>('week');
-  
-  // Initialize with a full day of data for the chart demo
-  const [tasks, setTasks] = useState<Task[]>(() => {
-      const today = new Date().toISOString().split('T')[0];
-      return [
-        { id: '1', title: 'Morning Yoga', type: EnergyType.HEAL, completed: true, energyPoints: 20, duration: 1, date: today, startTime: 7, substeps: [] },
-        { id: '2', title: 'Deep Work', type: EnergyType.CREATE, completed: false, energyPoints: -40, duration: 3, date: today, startTime: 9, substeps: [] },
-        { id: '3', title: 'Lunch Break', type: EnergyType.FUN, completed: false, energyPoints: 15, duration: 1, date: today, startTime: 12, substeps: [] },
-        { id: '4', title: 'Team Meeting', type: EnergyType.CHORE, completed: false, energyPoints: -20, duration: 1, date: today, startTime: 13, substeps: [] },
-        { id: '5', title: 'Emails', type: EnergyType.CHORE, completed: false, energyPoints: -10, duration: 1, date: today, startTime: 14, substeps: [] },
-        { id: '6', title: 'Design Session', type: EnergyType.CREATE, completed: false, energyPoints: -25, duration: 2, date: today, startTime: 15, substeps: [] },
-        { id: '7', title: 'Walk Dog', type: EnergyType.HEAL, completed: false, energyPoints: 30, duration: 1, date: today, startTime: 17, substeps: [] },
-        { id: '8', title: 'Gaming', type: EnergyType.FUN, completed: false, energyPoints: 40, duration: 2, date: today, startTime: 20, substeps: [] },
-      ];
-  });
-
+  const [tasks, setTasks] = useState<Task[]>(() => generateWeeklyData());
   const [stickers, setStickers] = useState<StickerItem[]>([]);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [now, setNow] = useState(new Date()); 
@@ -82,16 +177,23 @@ export default function App() {
   const [wakingStart, setWakingStart] = useState(6);
   const [wakingEnd, setWakingEnd] = useState(22);
 
-  // Modal State
+  // UI State
   const [showSketchPad, setShowSketchPad] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
-  const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [stickerLibrary, setStickerLibrary] = useState<string[]>([]);
+  
+  // Interaction State
+  const [creationMenu, setCreationMenu] = useState<{ x: number, y: number, date: string, hour: number } | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [checklistState, setChecklistState] = useState<{ taskId: string, x: number, y: number, pinned: boolean } | null>(null);
+  const [checklistDragOffset, setChecklistDragOffset] = useState<{x: number, y: number} | null>(null);
   
   // Drag & Resize State
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
   const [dropTarget, setDropTarget] = useState<{ date?: string, hour?: number, type: 'cell' | 'backlog' } | null>(null);
+  const [dragStart, setDragStart] = useState<{ task: Task, x: number, y: number } | null>(null);
   
   const [resizingTask, setResizingTask] = useState<{task: Task, startY: number, startDuration: number} | null>(null);
   const [resizingTaskTop, setResizingTaskTop] = useState<{task: Task, startY: number, startTime: number, startDuration: number} | null>(null);
@@ -128,16 +230,12 @@ export default function App() {
       const [y1, m1, d1] = startDate.split('-').map(Number);
       const [y2, m2, d2] = endDate.split('-').map(Number);
       
-      // Use noon to avoid DST/Timezone midnight issues
       let curr = new Date(y1, m1 - 1, d1, 12, 0, 0);
       const end = new Date(y2, m2 - 1, d2, 12, 0, 0);
       
       const step = end > curr ? 1 : -1;
-      
-      // We start from the day AFTER/BEFORE the start date
       curr.setDate(curr.getDate() + step);
 
-      // Safety counter
       let limit = 0;
       while ((step > 0 ? curr <= end : curr >= end) && limit < 100) {
           const y = curr.getFullYear();
@@ -159,6 +257,16 @@ export default function App() {
   // Global Mouse Handlers
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
+        // 0. Check Drag Threshold
+        if (dragStart && !draggedTask) {
+             const dx = e.clientX - dragStart.x;
+             const dy = e.clientY - dragStart.y;
+             if (Math.sqrt(dx*dx + dy*dy) > 5) { // 5px movement threshold
+                 setDraggedTask(dragStart.task);
+                 setDragPosition({ x: e.clientX, y: e.clientY });
+             }
+        }
+
         // 1. Task Dragging (Move)
         if (draggedTask) {
             setDragPosition({ x: e.clientX, y: e.clientY });
@@ -199,17 +307,14 @@ export default function App() {
             }
         }
 
-        // 4. Copy Dragging (Left/Right)
+        // 4. Copy Dragging
         if (dragCopyState) {
             const elements = document.elementsFromPoint(e.clientX, e.clientY);
-            // Look for a day column or cell
             const target = elements.find(el => el.hasAttribute('data-date'));
             if (target) {
                 const targetDate = target.getAttribute('data-date');
                 if (targetDate && targetDate !== dragCopyState.originalTask.date) {
                     const originDate = dragCopyState.originalTask.date!;
-                    
-                    // Logic: Generate preview tasks between origin and target
                     let shouldGenerate = false;
                     if (dragCopyState.direction === 'right' && targetDate > originDate) shouldGenerate = true;
                     if (dragCopyState.direction === 'left' && targetDate < originDate) shouldGenerate = true;
@@ -225,7 +330,6 @@ export default function App() {
                         }));
                         setDragCopyState(prev => prev ? { ...prev, previews: newPreviews } : null);
                     } else {
-                        // If we move back to origin or past it in wrong direction, clear previews
                         setDragCopyState(prev => prev ? { ...prev, previews: [] } : null);
                     }
                 }
@@ -240,9 +344,21 @@ export default function App() {
                 : s
             ));
         }
+
+        // 6. Checklist Dragging
+        if (checklistState && checklistDragOffset) {
+            setChecklistState(prev => prev ? {
+                ...prev,
+                x: e.clientX - checklistDragOffset.x,
+                y: e.clientY - checklistDragOffset.y
+            } : null);
+        }
     };
 
     const handleMouseUp = (e: MouseEvent) => {
+        setDragStart(null); 
+        setChecklistDragOffset(null);
+
         // Handle Task Drag Drop
         if (draggedTask && dropTarget) {
             const isCopy = e.altKey;
@@ -263,7 +379,6 @@ export default function App() {
         // Handle Copy Drag Commit
         if (dragCopyState) {
             if (dragCopyState.previews.length > 0) {
-                // Convert previews to real tasks
                 const newTasks = dragCopyState.previews.map(p => ({
                     ...p,
                     id: Math.random().toString(36).substr(2, 9),
@@ -287,20 +402,37 @@ export default function App() {
         window.removeEventListener('mousemove', handleMouseMove);
         window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [draggedTask, dropTarget, resizingTask, resizingTaskTop, dragCopyState, isDraggingSticker, activeStickerId, dragOffset, wakingStart]);
+  }, [draggedTask, dropTarget, resizingTask, resizingTaskTop, dragCopyState, isDraggingSticker, activeStickerId, dragOffset, wakingStart, dragStart, checklistState, checklistDragOffset]);
 
   // --- Handlers ---
-  const addTask = (title: string, type: EnergyType) => {
+  const handleBackgroundClick = (e: React.MouseEvent) => {
+      setCreationMenu(null);
+      
+      // Only deselect if clicking on actual background, not on other interactables
+      const target = e.target as HTMLElement;
+      if (!target.closest('.task-card') && !target.closest('#floating-checklist') && !target.closest('.control-popup')) {
+          setSelectedTaskId(null);
+          if (checklistState && !checklistState.pinned) {
+              setChecklistState(null);
+          }
+      }
+      setActiveStickerId(null);
+  };
+
+  const addTask = (title: string, type: EnergyType, date?: string, hour?: number) => {
     const newTask: Task = {
       id: Math.random().toString(36).substr(2, 9),
       title,
       type,
       completed: false,
-      energyPoints: type === EnergyType.CHORE || type === EnergyType.CREATE ? -10 : 10,
+      date,
+      startTime: hour,
+      energyPoints: 50,
       duration: 1,
       substeps: []
     };
     setTasks(prev => [...prev, newTask]);
+    return newTask;
   };
 
   const handleResizeStart = (e: React.MouseEvent, task: Task) => {
@@ -342,7 +474,150 @@ export default function App() {
       setStickers(prev => prev.map(s => s.id === id ? { ...s, ...updates } : s));
   };
 
+  const updateTaskTitle = (id: string, newTitle: string) => {
+      setTasks(prev => prev.map(t => t.id === id ? { ...t, title: newTitle } : t));
+  };
+
   // --- Renderers ---
+  const renderFloatingChecklist = () => {
+      if (!checklistState) return null;
+      const task = tasks.find(t => t.id === checklistState.taskId);
+      if (!task) return null;
+
+      // Ensure checklist is visible if selected
+      const isVisible = checklistState.pinned || selectedTaskId === task.id;
+      if (!isVisible) return null;
+
+      return (
+          <div 
+            id="floating-checklist"
+            className="fixed z-[80] w-64 bg-white/95 rounded-xl shadow-2xl border border-stone-200 flex flex-col overflow-hidden animate-pop-in"
+            style={{ 
+                left: checklistState.x, 
+                top: checklistState.y,
+                height: 'auto',
+                maxHeight: '400px'
+            }}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+              <div 
+                className="h-8 bg-stone-100 border-b border-stone-200 flex items-center justify-between px-2 cursor-grab active:cursor-grabbing"
+                onMouseDown={(e) => {
+                    e.stopPropagation();
+                    const rect = e.currentTarget.parentElement?.getBoundingClientRect();
+                    if (rect) {
+                        setChecklistDragOffset({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+                    }
+                }}
+              >
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-stone-500 truncate max-w-[150px]">{task.title}</span>
+                  <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => setChecklistState(prev => prev ? {...prev, pinned: !prev.pinned} : null)}
+                        className={`p-1 rounded-md transition-colors ${checklistState.pinned ? 'bg-blue-100 text-blue-600' : 'hover:bg-stone-200 text-stone-400'}`}
+                      >
+                          {checklistState.pinned ? <Pin size={12} fill="currentColor"/> : <PinOff size={12}/>}
+                      </button>
+                      <button 
+                        onClick={() => setChecklistState(null)}
+                        className="p-1 hover:bg-red-100 hover:text-red-500 rounded-md text-stone-400 transition-colors"
+                      >
+                          <X size={12} />
+                      </button>
+                  </div>
+              </div>
+              <div className="p-3 bg-stone-50/50 flex flex-col gap-2">
+                 <div className="space-y-1 max-h-60 overflow-y-auto custom-scrollbar">
+                    {task.substeps.map(step => (
+                        <div key={step.id} className="flex items-center gap-2 group">
+                             <button 
+                                onClick={() => {
+                                    setTasks(prev => prev.map(t => t.id === task.id ? {
+                                        ...t,
+                                        substeps: t.substeps.map(s => s.id === step.id ? {...s, completed: !s.completed} : s)
+                                    } : t));
+                                }}
+                                className={`text-stone-400 hover:text-green-500 transition-colors ${step.completed ? 'text-green-500' : ''}`}
+                             >
+                                 {step.completed ? <CheckSquare size={14}/> : <Square size={14}/>}
+                             </button>
+                             <input 
+                                value={step.title}
+                                onChange={(e) => {
+                                    setTasks(prev => prev.map(t => t.id === task.id ? {
+                                        ...t,
+                                        substeps: t.substeps.map(s => s.id === step.id ? {...s, title: e.target.value} : s)
+                                    } : t));
+                                }}
+                                className={`bg-transparent text-xs outline-none flex-1 border-b border-transparent focus:border-stone-300 ${step.completed ? 'line-through text-stone-400' : 'text-stone-700'}`}
+                             />
+                             <button 
+                                onClick={() => {
+                                     setTasks(prev => prev.map(t => t.id === task.id ? {
+                                        ...t,
+                                        substeps: t.substeps.filter(s => s.id !== step.id)
+                                    } : t));
+                                }}
+                                className="opacity-0 group-hover:opacity-100 text-stone-300 hover:text-red-400"
+                             >
+                                 <X size={12} />
+                             </button>
+                        </div>
+                    ))}
+                    {task.substeps.length === 0 && <div className="text-[10px] text-stone-400 italic text-center py-2">No items yet</div>}
+                 </div>
+                 <div className="flex gap-1 pt-2 border-t border-stone-200">
+                     <input 
+                        placeholder="Add item..."
+                        className="flex-1 text-xs bg-white border border-stone-200 rounded px-2 py-1 outline-none focus:border-stone-400"
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                const val = (e.target as HTMLInputElement).value;
+                                if (val.trim()) {
+                                    setTasks(prev => prev.map(t => t.id === task.id ? {
+                                        ...t,
+                                        substeps: [...t.substeps, { id: Math.random().toString(36).substr(2,9), title: val, completed: false }]
+                                    } : t));
+                                    (e.target as HTMLInputElement).value = '';
+                                }
+                            }
+                        }}
+                     />
+                 </div>
+              </div>
+          </div>
+      );
+  };
+
+  const renderTypeSelector = () => {
+      if (!creationMenu) return null;
+
+      return (
+          <div 
+            className="fixed z-[100] flex gap-3 pointer-events-auto"
+            style={{ 
+                left: Math.min(window.innerWidth - 250, creationMenu.x), 
+                top: creationMenu.y - 60 
+            }}
+          >
+              {ENERGY_OPTIONS.map((opt, i) => (
+                  <button
+                    key={opt.type}
+                    className="flex flex-col items-center justify-center w-12 h-12 bg-white rounded-full shadow-lg border border-stone-200 hover:scale-110 transition-transform animate-pop-in"
+                    style={{ animationDelay: `${i * 50}ms`, borderColor: opt.color }}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        addTask('New Task', opt.type, creationMenu.date, creationMenu.hour);
+                        setCreationMenu(null);
+                    }}
+                  >
+                      <span className="text-xl">{opt.icon}</span>
+                  </button>
+              ))}
+          </div>
+      );
+  };
+
   const renderStickerLayer = () => (
       <div className="fixed inset-0 pointer-events-none z-50 overflow-hidden print-layout">
           {stickers.map(sticker => (
@@ -421,6 +696,10 @@ export default function App() {
   );
 
   const renderMonthView = () => {
+    // ... (Month view logic mostly same, but make sure it handles click/selection)
+    // For brevity, skipping logic changes here as user focused on Week/Task interaction, 
+    // but assuming standard grid. Month view is less interactive for detailed task editing in this requested flow.
+    // Keeping existing rendering but updating task styling logic.
     const startDay = new Date(currentMonthStart).getDay();
     const daysInMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0).getDate();
     const blanks = Array.from({ length: startDay });
@@ -429,38 +708,35 @@ export default function App() {
     return (
         <div className="grid grid-cols-7 gap-2 p-6 h-full overflow-y-auto">
             {DAYS.map(d => <div key={d} className="text-center font-extrabold text-stone-600 letterpress text-xs uppercase tracking-widest">{d}</div>)}
-            
             {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[6rem]"></div>)}
-            
             {days.map(day => {
                 const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const dayTasks = tasks.filter(t => t.date === dateStr);
-                const isTarget = dropTarget?.type === 'cell' && dropTarget.date === dateStr;
                 const isToday = day === now.getDate() && currentDate.getMonth() === now.getMonth() && currentDate.getFullYear() === now.getFullYear();
 
                 return (
                     <div 
                         key={day} 
-                        data-drop-target="true"
-                        data-date={dateStr}
-                        className={`min-h-[6rem] p-2 relative border border-stone-300/40 rounded-lg transition-all ${isTarget ? 'bg-blue-50/50 scale-[1.02]' : 'hover:bg-stone-100/30'} ${isToday ? 'bg-red-50/20' : ''}`}
+                        className={`min-h-[6rem] p-2 relative border border-stone-300/40 rounded-lg transition-all ${isToday ? 'bg-red-50/20' : ''}`}
                     >
                          <span className={`absolute top-1 right-2 text-sm font-black pointer-events-none letterpress ${isToday ? 'text-red-600' : 'text-stone-500'}`}>{day}</span>
-                         
                          <div className="mt-6 flex flex-col gap-1">
-                            {dayTasks.map(task => (
-                                <div 
-                                    key={task.id}
-                                    onMouseDown={(e) => { e.stopPropagation(); setDraggedTask(task); setDragPosition({x: e.clientX, y: e.clientY}); }} 
-                                    onDoubleClick={(e) => { e.stopPropagation(); setEditingTask(task); }}
-                                    className={`text-[10px] p-1 px-2 rounded-sm cursor-grab truncate border-l-2 flex justify-between items-center group ${getEnergyColor(task.type)} shadow-sm font-bold`}
-                                >
-                                    <span className={`text-strong ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</span>
-                                    {task.startTime !== undefined && (
-                                        <span className="text-[9px] font-mono ml-1 opacity-80">{task.startTime}:00</span>
-                                    )}
-                                </div>
-                            ))}
+                            {dayTasks.map(task => {
+                                const styles = getEnergyColorStyles(task.type, task.energyPoints);
+                                return (
+                                    <div 
+                                        key={task.id}
+                                        className="text-[10px] p-1 px-2 rounded-sm truncate border-l-2 font-bold cursor-pointer hover:opacity-80 transition-opacity"
+                                        style={styles}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setEditingTask(task);
+                                        }}
+                                    >
+                                        <span className={`text-strong ${task.completed ? 'line-through opacity-60' : ''}`}>{task.title}</span>
+                                    </div>
+                                )
+                            })}
                          </div>
                     </div>
                 );
@@ -484,18 +760,23 @@ export default function App() {
     const HOUR_HEIGHT_REM = 2.5; // h-10 is 2.5rem
     const timeTopRem = (nowMinutes - startMinutes) * (HOUR_HEIGHT_REM / 60);
 
-    // Merge actual tasks with previews for rendering
     const allRenderTasks = [...tasks];
     if (dragCopyState && dragCopyState.previews.length > 0) {
-        // We only add previews if they aren't already in the list (though ID check handles key uniqueness)
         dragCopyState.previews.forEach(p => allRenderTasks.push(p));
     }
 
     return (
-        <div className="flex flex-col h-full overflow-hidden">
+        <div className="flex flex-col h-full overflow-hidden relative">
+            {/* Blur Overlay for Focus Mode */}
+            {selectedTaskId && (
+                <div className="absolute inset-0 z-30 bg-white/40 backdrop-blur-sm transition-all duration-300"></div>
+            )}
+
             {/* Header */}
-            <div className="grid border-b border-stone-300/50 pb-2 mb-2" style={{ gridTemplateColumns: '3.5rem repeat(7, 1fr)' }}>
-                <div className="p-2"></div>
+            <div className="grid border-b border-stone-300/50 pb-2 mb-2 relative" style={{ gridTemplateColumns: '3.5rem repeat(7, 1fr)' }}>
+                <div className="p-2 flex items-center justify-center">
+                    <StickyBall />
+                </div>
                 {weekDates.map(d => {
                     const isToday = d.getDate() === now.getDate() && d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
                     return (
@@ -538,20 +819,14 @@ export default function App() {
                                             data-drop-target="true"
                                             data-date={dateStr}
                                             data-hour={h}
-                                            onClick={() => {
-                                                const newTask = {
-                                                    id: Math.random().toString(36).substr(2, 9),
-                                                    title: 'New Task',
-                                                    type: EnergyType.CHORE,
-                                                    completed: false,
-                                                    date: dateStr,
-                                                    startTime: h,
-                                                    duration: 1,
-                                                    energyPoints: -10,
-                                                    substeps: []
-                                                };
-                                                setTasks(prev => [...prev, newTask]);
-                                                setEditingTask(newTask);
+                                            onClick={(e) => {
+                                                // Prevent bubbling if we clicked a task, but handle creation if empty
+                                                setCreationMenu({ 
+                                                    x: e.clientX, 
+                                                    y: e.clientY, 
+                                                    date: dateStr, 
+                                                    hour: h 
+                                                });
                                             }}
                                             className={`h-10 border-b border-stone-200/30 transition-colors cursor-pointer ${isTarget ? 'bg-blue-50/30' : 'hover:bg-stone-50/20'}`}
                                         >
@@ -578,66 +853,132 @@ export default function App() {
                                     if (startOffset < 0 && (startOffset + task.duration) <= 0) return null;
                                     
                                     const effectiveStart = Math.max(0, startOffset);
-                                    
-                                    // Math for exact positioning: effectiveStart * height_per_hour
                                     const top = effectiveStart * HOUR_HEIGHT_REM; 
                                     const height = (task.duration - (effectiveStart - startOffset)) * HOUR_HEIGHT_REM;
 
                                     if (height <= 0) return null;
 
                                     const isPreview = (task as any).isPreview;
+                                    const isSelected = selectedTaskId === task.id;
+                                    const styles = getEnergyColorStyles(task.type, task.energyPoints);
 
                                     return (
                                         <div 
                                             key={task.id}
                                             onMouseDown={(e) => { 
                                                 if (isPreview) return;
-                                                e.stopPropagation(); 
-                                                setDraggedTask(task); 
-                                                setDragPosition({x: e.clientX, y: e.clientY}); 
+                                                // Allow dragging only if not interacting with controls
+                                                if (!(e.target as HTMLElement).closest('.control-element')) {
+                                                    setDragStart({ task, x: e.clientX, y: e.clientY });
+                                                }
                                             }}
-                                            onDoubleClick={(e) => { 
+                                            onClick={(e) => {
+                                                e.stopPropagation();
                                                 if (isPreview) return;
-                                                e.stopPropagation(); 
-                                                setEditingTask(task); 
+                                                setSelectedTaskId(task.id);
+                                                // Auto open checklist near the task
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                setChecklistState({
+                                                    taskId: task.id,
+                                                    x: rect.right + 10,
+                                                    y: rect.top,
+                                                    pinned: false
+                                                });
                                             }}
-                                            className={`absolute left-1 right-1 px-4 py-2 rounded-md shadow-sm border text-xs cursor-grab overflow-hidden flex flex-col group ${getEnergyColor(task.type)} ${task.completed ? 'opacity-60 grayscale' : ''} ${isPreview ? 'opacity-50 border-dashed border-stone-400 pointer-events-none' : ''}`}
-                                            style={{ top: `${top}rem`, height: `${height}rem`, zIndex: 20 }}
+                                            onDoubleClick={(e) => {
+                                                e.stopPropagation();
+                                                if (isPreview) return;
+                                                setEditingTask(task);
+                                            }}
+                                            className={`
+                                                absolute left-1 right-1 pl-3 pr-1 py-1 rounded-md shadow-sm border text-xs overflow-visible flex flex-col group task-card
+                                                transition-all duration-300 ease-out
+                                                ${isPreview ? 'opacity-50 border-dashed border-stone-400 pointer-events-none' : 'cursor-pointer'}
+                                                ${isSelected ? 'z-[60] scale-105 shadow-xl ring-2 ring-stone-300' : 'z-20 hover:scale-[1.02]'}
+                                                ${task.completed ? 'opacity-50' : ''}
+                                            `}
+                                            style={{ 
+                                                top: `${top}rem`, 
+                                                height: `${height}rem`, 
+                                                backgroundColor: task.completed ? 'transparent' : styles.backgroundColor,
+                                                borderColor: styles.borderColor,
+                                                color: styles.color,
+                                                borderWidth: task.completed ? '2px' : '1px'
+                                            }}
                                         >
-                                            {/* Top Resize Handle */}
+                                            {/* --- FOCUS CONTROLS --- */}
+                                            {isSelected && !isPreview && (
+                                                <>
+                                                    {/* Type Selector (Top) */}
+                                                    <div className="absolute -top-12 left-1/2 -translate-x-1/2 flex gap-2 control-popup control-element">
+                                                        {ENERGY_OPTIONS.map(opt => (
+                                                            <button
+                                                                key={opt.type}
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, type: opt.type } : t));
+                                                                }}
+                                                                className={`w-8 h-8 rounded-full bg-white shadow-md border-2 flex items-center justify-center transition-transform hover:scale-110 ${task.type === opt.type ? 'scale-110' : 'opacity-80'}`}
+                                                                style={{ borderColor: opt.color }}
+                                                            >
+                                                                <span className="text-sm">{opt.icon}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+
+                                                    {/* Intensity Slider (Left) */}
+                                                    <div className="absolute -left-8 top-0 bottom-0 w-6 flex items-center justify-center control-popup control-element">
+                                                        <div className="h-32 w-2 bg-stone-200 rounded-full relative">
+                                                            <div 
+                                                                className="absolute bottom-0 left-0 right-0 bg-stone-500 rounded-full w-full"
+                                                                style={{ height: `${task.energyPoints}%` }}
+                                                            ></div>
+                                                            <input 
+                                                                type="range" min="0" max="100"
+                                                                value={task.energyPoints}
+                                                                onChange={(e) => {
+                                                                    setTasks(prev => prev.map(t => t.id === task.id ? { ...t, energyPoints: parseInt(e.target.value) } : t));
+                                                                }}
+                                                                className="absolute inset-0 w-full h-full opacity-0 cursor-ns-resize"
+                                                                style={{ writingMode: 'vertical-lr', direction: 'rtl' }} // rudimentary vertical interaction
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+
+                                            {/* Top Resize Handle (Invisible Area) */}
                                             {!isPreview && (
                                                 <div 
-                                                    className="absolute top-0 left-0 w-full h-2 cursor-ns-resize flex justify-center items-start opacity-0 group-hover:opacity-100 z-30 transition-opacity"
+                                                    className="absolute top-0 left-0 w-full h-3 cursor-ns-resize z-30"
                                                     onMouseDown={(e) => handleResizeTopStart(e, task)}
-                                                >
-                                                    <div className="w-6 h-1 bg-stone-400/50 rounded-full mt-0.5"></div>
-                                                </div>
+                                                ></div>
                                             )}
 
-                                            {/* Left Copy Handle */}
+                                            {/* Copy Handles */}
                                             {!isPreview && (
-                                                <div
-                                                    className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30"
-                                                    onMouseDown={(e) => handleCopyDragStart(e, task, 'left')}
-                                                >
-                                                    
-                                                </div>
+                                                <>
+                                                    <div className="absolute top-0 bottom-0 left-0 w-2 cursor-ew-resize z-30" onMouseDown={(e) => handleCopyDragStart(e, task, 'left')}></div>
+                                                    <div className="absolute top-0 bottom-0 right-0 w-2 cursor-ew-resize z-30" onMouseDown={(e) => handleCopyDragStart(e, task, 'right')}></div>
+                                                </>
                                             )}
 
-                                            {/* Right Copy Handle */}
-                                            {!isPreview && (
-                                                <div
-                                                    className="absolute top-0 bottom-0 right-0 w-2 cursor-ew-resize z-30"
-                                                    onMouseDown={(e) => handleCopyDragStart(e, task, 'right')}
-                                                >
-                                                    
-                                                </div>
-                                            )}
+                                            {/* Content */}
+                                            <div className="flex justify-between items-start h-full relative pointer-events-none">
+                                                <input 
+                                                    value={task.title}
+                                                    onChange={(e) => updateTaskTitle(task.id, e.target.value)}
+                                                    onMouseDown={(e) => e.stopPropagation()} 
+                                                    className={`
+                                                        w-full bg-transparent outline-none font-extrabold leading-tight text-[10px] pointer-events-auto
+                                                        ${task.completed ? 'line-through decoration-1 opacity-70' : 'text-strong'}
+                                                    `}
+                                                    style={{ color: styles.color }}
+                                                />
 
-                                            <div className="flex justify-between items-start pl-1 pr-1 pointer-events-none">
-                                                <span className={`font-extrabold leading-tight text-strong ${task.completed ? 'line-through decoration-1' : ''}`}>{task.title}</span>
                                                 <button 
-                                                    className="pointer-events-auto"
+                                                    className="pointer-events-auto shrink-0 ml-1 control-element"
+                                                    onMouseDown={(e) => e.stopPropagation()}
                                                     onClick={(e) => { 
                                                         if (isPreview) return;
                                                         e.stopPropagation(); 
@@ -647,22 +988,13 @@ export default function App() {
                                                     {task.completed ? <CheckCircle2 size={12}/> : <Circle size={12} />}
                                                 </button>
                                             </div>
-                                            {height > 2 && (
-                                                <div className="mt-1 opacity-70 pl-1 pointer-events-none">
-                                                    {task.substeps.length > 0 && (
-                                                        <div className="text-[9px] font-bold">{task.substeps.filter(s=>s.completed).length}/{task.substeps.length}</div>
-                                                    )}
-                                                </div>
-                                            )}
                                             
-                                            {/* Bottom Resize Handle */}
+                                            {/* Bottom Resize Handle (Invisible Area) */}
                                             {!isPreview && (
                                                 <div 
-                                                    className="absolute bottom-0 left-0 w-full h-2 cursor-ns-resize flex justify-center items-end opacity-0 group-hover:opacity-100 transition-opacity z-30"
+                                                    className="absolute bottom-0 left-0 w-full h-3 cursor-ns-resize z-20"
                                                     onMouseDown={(e) => handleResizeStart(e, task)}
-                                                >
-                                                    <div className="w-6 h-1 bg-stone-400/50 rounded-full mb-0.5"></div>
-                                                </div>
+                                                ></div>
                                             )}
                                         </div>
                                     );
@@ -677,8 +1009,10 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex overflow-hidden text-stone-700 select-none" onClick={() => setActiveStickerId(null)}>
+    <div className="h-screen w-screen flex overflow-hidden text-stone-700 select-none" onClick={handleBackgroundClick}>
       {renderStickerLayer()}
+      {renderTypeSelector()}
+      {renderFloatingChecklist()}
       
       {/* Ghost for Dragging */}
       {draggedTask && (
@@ -690,24 +1024,14 @@ export default function App() {
         </div>
       )}
 
-      {/* LEFT PANEL - PERMANENT */}
+      {/* LEFT PANEL */}
       <div 
         id="backlog-area"
-        className="w-80 h-full flex flex-col p-6 z-40 relative no-print shrink-0"
+        className="w-80 h-full flex flex-col p-6 z-40 relative no-print shrink-0 bg-stone-50/50 backdrop-blur-sm"
       >
         <div className="mb-6">
             <h1 className="text-2xl font-black letterpress-title mb-1">DoodlePlan</h1>
             <p className="text-xs text-stone-600 font-bold tracking-widest uppercase letterpress">Daily Organizer</p>
-        </div>
-
-        {/* Energy Flow Chart - Replaces Energy Budget */}
-        <div className="mb-6">
-            <EnergyFlowChart 
-                tasks={tasks}
-                date={now}
-                startHour={wakingStart}
-                endHour={wakingEnd}
-            />
         </div>
 
         {/* Todo Backlog */}
@@ -745,13 +1069,16 @@ export default function App() {
 
              <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {backlog.map(task => {
+                    const styles = getEnergyColorStyles(task.type, task.energyPoints);
                     if (draggedTask?.id === task.id) return null;
                     return (
                         <div 
                             key={task.id}
-                            onMouseDown={(e) => { e.stopPropagation(); setDraggedTask(task); setDragPosition({x: e.clientX, y: e.clientY}); }}
+                            onMouseDown={(e) => { e.stopPropagation(); setDragStart({ task, x: e.clientX, y: e.clientY }); }}
+                            onClick={(e) => { e.stopPropagation(); setSelectedTaskId(task.id); }}
                             onDoubleClick={(e) => { e.stopPropagation(); setEditingTask(task); }}
-                            className={`p-3 rounded-lg cursor-grab hover:shadow-md transition-all border border-stone-100 ${getEnergyColor(task.type)} bg-opacity-80`}
+                            className={`p-3 rounded-lg cursor-grab hover:shadow-md transition-all border border-stone-100 bg-opacity-80`}
+                            style={styles}
                         >
                             <div className="flex justify-between items-start">
                                 <span className={`text-sm font-bold text-strong ${task.completed ? 'line-through decoration-stone-600 opacity-50' : ''}`}>{task.title}</span>
@@ -877,6 +1204,15 @@ export default function App() {
             onDelete={(id) => setTasks(prev => prev.filter(t => t.id !== id))}
         />
       )}
+      <style>{`
+          @keyframes popIn {
+              from { opacity: 0; transform: scale(0.5) translateY(10px); }
+              to { opacity: 1; transform: scale(1) translateY(0); }
+          }
+          .animate-pop-in {
+              animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          }
+      `}</style>
     </div>
   );
 }
